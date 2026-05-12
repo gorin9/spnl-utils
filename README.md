@@ -8,7 +8,7 @@ matz が Spinel 本体に JSON 等を追加したら、対応する file を本 
 [gorin9/spinel-packer](https://github.com/gorin9/spinel-packer) で `install` する想定:
 
 ```sh
-spinel-packer install gorin9/-spnl-utils
+spinel-packer install gorin9/spnl-utils
 ```
 
 ## 設計方針
@@ -35,17 +35,17 @@ spinel-packer install gorin9/-spnl-utils
 
 ```sh
 # 取得
-$ spinel-packer install gorin9/-spnl-utils
-  resolving gorin9/-spnl-utils@main ...
+$ spinel-packer install gorin9/spnl-utils
+  resolving gorin9/spnl-utils@main ...
   resolved → <sha>
-  fetched into vendor/gorin9__-spnl-utils (N files)
+  fetched into vendor/gorin9__spnl-utils (N files)
 done.
 ```
 
 ```ruby
 # app.rb
-require_relative "vendor/gorin9__-spnl-utils/lib/json"
-require_relative "vendor/gorin9__-spnl-utils/lib/url"
+require_relative "vendor/gorin9__spnl-utils/lib/json"
+require_relative "vendor/gorin9__spnl-utils/lib/url"
 
 class App
   def index
@@ -56,12 +56,6 @@ end
 ```
 
 `vendor/` は `.gitignore` 推奨、`Spinelfile.lock` でロックして再現性を担保。
-
-## なぜ「-spnl-utils」(先頭ハイフン)?
-
-repo オーナーの命名選択。ファイルシステム上で `vendor/gorin9__-spnl-utils/` となる。
-`spinel-packer` の vendor dir 命名規約は `owner__repo` (`/` を `__` に置換) で、
-ハイフンは特殊扱いなし。
 
 ## 関連プロジェクト
 
