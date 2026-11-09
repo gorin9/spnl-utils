@@ -1,69 +1,60 @@
 # spnl-utils
 
-[matz/spinel](https://github.com/matz/spinel) 用の **汎用ユーティリティ + HTTP 関連の Ruby ライブラリ集**。
+Ruby/Spinel HTTP helpers built on standard JSON and CGI APIs.
 
-「**標準ライブラリが補充されるまでの暫定置き場**」という位置付け。
-matz が Spinel 本体に JSON 等を追加したら、対応する file を本 repo から削除する想定。
-
-[gorin9/spinel-packer](https://github.com/gorin9/spinel-packer) で `install` する想定:
-
-```sh
-spinel-packer install gorin9/spnl-utils
-```
-
-## 設計方針
-
-- **NPM 化しない**: 1 機能 1 repo に分けない、関連機能は集約
-- **dead-code-elimination 前提**: Spinel は使ってない関数を最終バイナリに入れないので、
-  bundle で配って unused module はバイナリに入らない (22KB 哲学を壊さない)
-- **「暫定」を明示**: 本家 stdlib が追ったら本 repo は徐々に痩せる
-
-## 含まれるライブラリ
-
-| ファイル | 行数 | 役割 |
-|---|---|---|
-| `lib/json.rb`     | 401 | JSON encoder / decoder (pure Spinel) |
-| `lib/url.rb`      | 145 | URL parse / build / query string / percent-encoding |
-| `lib/cookie.rb`   | 112 | HTTP Cookie parse / serialize |
-| `lib/request.rb`  | 173 | HTTP Request 表現 (Rack 風) |
-| `lib/response.rb` | 116 | HTTP Response builder |
-| `lib/router.rb`   |  61 | URL routing (簡易) |
-| `lib/form.rb`     |  19 | x-www-form-urlencoded parser (URL の薄いラッパ) |
-| **計** | **1027** | |
-
-## 使い方
-
-```sh
-# 取得
-$ spinel-packer install gorin9/spnl-utils
-  resolving gorin9/spnl-utils@main ...
-  resolved → <sha>
-  fetched into vendor/gorin9__spnl-utils (N files)
-done.
+```toml
+[dependencies]
+spnl_utils = { git = "https://github.com/gorin9/spnl-utils", ref = "modernize-spinel-2026" }
 ```
 
 ```ruby
-# app.rb
-require_relative "vendor/gorin9__spnl-utils/lib/json"
-require_relative "vendor/gorin9__spnl-utils/lib/url"
-
-class App
-  def index
-    body = JSON.encode({ hello: "world" })
-    # ...
-  end
-end
+require "spnl_utils"
+request = SpnlUtils::Request.parse("GET /?q=%E9%9B%AA HTTP/1.1\r\nHost: example\r\n\r\n")
+response = SpnlUtils::Response.json_body(JSON.generate({"q" => request.query["q"]}))
+puts response.to_wire
 ```
 
-`vendor/` は `.gitignore` 推奨、`Spinelfile.lock` でロックして再現性を担保。
+`SpnlUtils::Request/Response/URL/Cookie/Router` are namespaced entry points.
+Historical relative lib/ entry points remain compatible; require "spnl_utils/legacy"
+explicitly to install all old top-level names. The default entry point installs none.
+The gem adds the package root, not its lib/ directory, to avoid shadowing standard json.
 
-## 関連プロジェクト
+## Migration from 0.1
 
-- [matz/spinel](https://github.com/matz/spinel) — 本家 Spinel コンパイラ
-- [gorin9/spinel-packer](https://github.com/gorin9/spinel-packer) — install / upgrade / lock / check / pack ツール
-- [gorin9/spnl-web](https://github.com/gorin9/spnl-web) — Web フレームワーク ライブラリ集 (本 utils と相補的)
-- [gorin9/spinel-demo](https://github.com/gorin9/spinel-demo) — Spinel 製 async HTTP サーバの実戦デモ
+JSON.parse now returns standard Hash/Array/scalar values. Replace
+`value.get_field("name").s` with `value["name"]`, and `set_field`/`push_arr` with
+Hash/Array operations. `JSON.encode` is a compatibility alias for standard generation;
+`gen_*` return native Ruby values. The old JsonValue return contract cannot coexist
+with standard JSON.parse and has been removed in this version.
 
-## ライセンス
+URL.encode/decode are **form** encoding (+ for space), not URI path/component encoding.
+parse_query keeps the last duplicate value, matching the old Hash contract; require "uri" and use
+URI.decode_www_form directly when duplicate fields must be retained.
 
-MIT
+## HTTP contract
+
+Request.parse accepts exactly one complete HTTP/1.0 or HTTP/1.1 origin-form request.
+Request.read handles fragmented socket reads. Headers are capped at 16 KiB and bodies
+at 1 MiB; HTTP/1.1 requires Host. Duplicate headers, conflicting framing, extra bytes,
+invalid Content-Length and Transfer-Encoding are rejected. Chunked request bodies and
+pipelining are not supported. This is a deliberately bounded HTTP subset, not Rack.
+Deploy behind a proxy that sends Content-Length requests when chunked uploads are needed.
+
+Responses close the connection, preserve multiple Set-Cookie values, reject header
+injection, omit bodies for HEAD/204/304 and prevent conflicting managed headers.
+Cookie.build defaults to Secure + HttpOnly + SameSite=Lax; opt out of Secure only for
+local HTTP. The route matcher preserves segment boundaries; spnl-router provides
+validated static HTTP dispatch generation.
+
+## Compatibility and verification
+
+Supported baseline: Spinel `2026.10.25` (Linux) and CRuby 3.1+. CI also checks the
+reference master commit `60c0273261415d2b5edd6480667a705a68addbd2`; this is a pinned
+comparison, not an assertion about every future master build. Check CHANGELOG before upgrading.
+No performance or binary-size claim is inherited from the May prototype.
+
+Run `rake test`. Runtime packages additionally use `spin test`; generator repositories
+use `ruby scripts/verify_runtime.rb` to compile their generated code and compare with CRuby.
+See CONTRIBUTING.md. Original notes are in `docs/historical-readme-may-2026.md`.
+
+MIT licensed. Development version; no gem or package-index release is published automatically.
